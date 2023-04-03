@@ -7,8 +7,10 @@ Pricesbefore2009.csv
 Pricesafter2009.csv
 
 # Technique used
-1. Multi-variable Regression 
-2. Diagnostic plots
-3. Density plots
+1. Data Cleaning
+2. Multi-variable Regression 
+3. Diagnostic plots
+4. Density plots
 
 # R Codes
+Housing Price Manipulation.Rmd
