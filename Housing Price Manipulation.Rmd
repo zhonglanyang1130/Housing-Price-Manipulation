@@ -1,0 +1,258 @@
+---
+title: "Housing Price Manipulation"
+author: "Zhonglan Yang"
+output:
+  html_document: default
+  pdf_document: default
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+## Read & Examine Data before 2009
+
+*Read and store the data from the file PricesBefore2009.csv into a variable called before2009.*
+
+```{r}
+library(readr)
+before2009 <- read_csv(choose.files())
+str(before2009)
+summary(before2009)
+```
+
+*Convert MSSubClass, OverallQual, OverallCond into character*
+
+```{r}
+before2009$MSSubClass <-as.character(before2009$MSSubClass)
+before2009$OverallQual <- as.character(before2009$OverallQual)
+before2009$OverallCond <- as.character(before2009$OverallCond)
+str(before2009[,c("MSSubClass","OverallQual","OverallCond")])
+summary(before2009[,c("MSSubClass","OverallQual","OverallCond")])
+```
+
+## Clean NAs
+
+Find out how many NA each variable has
+
+```{r}
+library(purrr)
+library(dplyr)
+temp = map(before2009, ~sum(is.na(.))) %>% as_tibble() %>% t()
+beforeNAs = tibble('Columns' = rownames(temp), "NAs" = temp[,1])
+beforeNAs %>% head(10)
+```
+
+*Drop all the columns (except SalePrice) that have 20 or more missing values. Drop the columns called X1, Id, and Utilities (all its values are the same).*
+
+```{r}
+#create data frame with 0 rows and 2 columns
+df <- data.frame(matrix(ncol = 2, nrow = 0))
+
+for (i in 1:nrow(beforeNAs)){
+  if (beforeNAs[i,2] >= 20 && beforeNAs[i,1] != "SalePrice" ||beforeNAs[i,1] == "...1" ||beforeNAs[i,1] == "Id" ||beforeNAs[i,1] == "Utilities") {
+   df[nrow(df) + 1,] <- beforeNAs[i,]
+  }
+}
+
+dropCols<-df[,1]
+dropCols
+before2009 <-dplyr::select(before2009, -dropCols)
+
+str(before2009 )
+before2009 %>% head(10)
+```
+
+## Multiple Linear regression
+
+*Create a multiple linear regression on all the variables where SalePrice is the dependent variable.*
+
+```{r}
+regBefore2009 <- lm(SalePrice ~ ., data = before2009)
+summary(regBefore2009)
+```
+
+## Refining
+
+*Choose 15 variables that are significant*
+
+```{r}
+regBefore2009optimal <- lm(SalePrice ~ MSZoning + LotArea + Street+ LandContour + LotConfig + LandSlope+ Neighborhood +OverallQual + RoofMatl+ MasVnrType+ BsmtUnfSF + BedroomAbvGr+ KitchenQual+ Fireplaces+ GarageArea, data = before2009)
+summary(regBefore2009optimal)
+
+```
+
+## Diagnostic plots for regBefore2009optimal
+
+```{r}
+library(ggfortify)
+regBefore2009optimal %>%
+  autoplot()
+```
+
+## Read & Examine Data after 2009
+
+*Read the PricesAfter2009.csv data and assign it to a variable called after2009.*
+
+```{r}
+after2009 <- read_csv(choose.files())
+str(after2009)
+summary(after2009)
+after2009$MSSubClass <-as.character(after2009$MSSubClass)
+after2009$OverallQual <- as.character(after2009$OverallQual)
+after2009$OverallCond <- as.character(after2009$OverallCond)
+str(after2009[,c("MSSubClass","OverallQual","OverallCond")])
+summary(after2009[,c("MSSubClass","OverallQual","OverallCond")])
+
+#drop unnecessary columns
+temp_af = map(after2009, ~sum(is.na(.))) %>% as_tibble() %>% t()
+afterNAs = tibble('Columns' = rownames(temp_af), "NAs" = temp_af[,1])
+afterNAs %>% head(10)
+#create data frame with 0 rows and 2 columns
+df1 <- data.frame(matrix(ncol = 2, nrow = 0))
+for (i in 1:nrow(afterNAs)){
+  if (afterNAs[i,2] >= 20 && afterNAs[i,1] != "SalePrice" ||afterNAs[i,1] == "...1" ||afterNAs[i,1] == "Id" ||afterNAs[i,1] == "Utilities") {
+   df1[nrow(df1) + 1,] <- afterNAs[i,]
+  }
+}
+
+dropCols1<-df1[,1]
+dropCols1
+after2009 <-dplyr::select(after2009, -dropCols1)
+
+str(after2009 )
+after2009 %>% head(10)
+
+```
+
+## Density Plot of SalePrice after 2009
+
+*Create density plot to examine whether there are unusual patterns in neighborhood NAmes, Gilbert and NridgHt.*
+
+```{r}
+ggplot(data = after2009, aes(x = SalePrice)) + geom_density() + facet_wrap(~ Neighborhood) + ggtitle("SalePrice after 2009 by Neighborhood") +  xlab('SalePrice after 2009')
+```
+
+## Evaluate density plots of NAmes & Gilbert for both before and after 2009
+
+*The density plot for NAmes between 2009 and 2010 does not look any different from other density plots. If there are fraudsters, they are making an effort to mask their activities.*
+
+*Create density plots for both SalePrice in NAmes before 2009 and the other for after 2009. Compare the two to see if there is visual evidence of anomalous activity.*
+
+```{r}
+Names_after2009 <- after2009[after2009$Neighborhood == "NAmes",]
+Names_before2009 <- before2009[before2009$Neighborhood == "NAmes",]
+Gilbert_after2009 <- after2009[after2009$Neighborhood == "Gilbert",]
+Gilbert_before2009 <- before2009[before2009$Neighborhood == "Gilbert",]
+
+p1<-ggplot(data = Names_before2009, aes(x = SalePrice)) + geom_density(fill = "#F0E442") + facet_wrap(~ Neighborhood) + ggtitle("Density plot NAmes before 2009") + xlab('Sales Price')
+
+p2<- ggplot(data = Names_after2009, aes(x = SalePrice)) + geom_density(fill = "#009E73") + facet_wrap(~ Neighborhood) + ggtitle("Density plot NAmes after 2009") + xlab('Sales Price')
+
+p3<-ggplot(data = Gilbert_before2009, aes(x = SalePrice)) + geom_density(fill= "#56B4E9") + facet_wrap(~ Neighborhood) + ggtitle("Density plot Gilbert before 2009") + xlab('Sales Price')
+
+p4<-ggplot(data = Gilbert_after2009, aes(x = SalePrice)) + geom_density(fill = "#E69F00") + facet_wrap(~ Neighborhood) + ggtitle("Density plot Gilbert after 2009") + xlab('Sales Price')
+
+library(gridExtra)
+grid.arrange(
+  p1,
+  p2,
+  p3,
+  p4,
+  nrow = 2,
+  top = "SalePrice for Names and Gilbert before and after 2009 "
+)
+```
+
+![](http://127.0.0.1:49334/chunk_output/176EBAAC841281E8/1E14199F/cmf2yn76urc4w/000010.png?resize=8)
+
+According to the density plots, there are several signals of potential price manipulation for the neighborhood.
+First, the density plot of Gilbert after 2009 has one more peak at around sale price of \$150,000 while the density of Gilbert before 2009 remains flat below \$150,000.
+This might be an indication of price manipulation for Gilbert.
+Also, by observing the images, the sales prices of NAmes and Gilbert in the density plot after 2009 is above \$90,000 and \$141,000.
+This is different from the trend before 2009 (\$50,485 and \$119,373) and thus there may be price manipulation.
+We should investigate the price of houses at the breakpoint after 2009 and what they were before 2009.
+
+## Find more evidence
+
+*The density plots do not have sufficient evidence to support the claim of fraudulent activity. Use multiple linear regression to attempt to get more evidence. Run and refine to get a multiple linear regression for SalePrice after 2009.*
+
+```{r}
+regAfter2009optimal <- lm(SalePrice ~ LotArea + Street + LandSlope+ Neighborhood +OverallQual + RoofMatl+ MasVnrType+ BsmtUnfSF + BedroomAbvGr+ KitchenQual+ Fireplaces+ GarageArea, data = after2009)
+summary(regAfter2009optimal)
+```
+
+## Diagnostice plots for *regAfter2009optimal*
+
+*Display diagnostic plots of your regression (regAfter2009optimal).*
+
+```{r}
+regAfter2009optimal %>%
+  autoplot()
+  
+```
+
+## Residual vs. Fitted graph for regAfter2009optimal
+
+```{r}
+ggplot(regAfter2009optimal, 
+       aes(x =.fitted , y=.resid)) +
+  geom_point()+
+  stat_smooth()  +
+  labs(title = "SalePrice after 2009 by Gilbert")
+```
+
+According to the Residual vs Fitted distribiton graph above, there are several outliers(280,318,533) on the upper and bottom right corner in the range between 3e+05 to 4e+05 of the x-axis.
+In the normal qq plot above, there are two outliers(280,318) in the top right corner and several outliers(such as 533) locate in the lower left corner.
+From Residuals vs Leverage graph, there are three potential outliers that are far from other points, which are 441,112,187.
+
+## Housing Price Manipulation
+
+*Now, let's think like a fraudster and do something smarter fraudsters may do. Instead of misrepresenting values by just reporting the mean value of the houses sold in NAmes before 2009, what is something more clever and nuanced that the fraudsters could report these values?* *Instead of using the mean selling price from before2009 dataset, the fraudster could use the After2009 dataset to generate a regression model, then use selected variables of that particular house to estimate the sales price.*
+
+```{r}
+#The mean value of salesprice in NAmes before 2009 is 142740.8
+#NAmes <- before2009[before2009$Neighborhood == "NAmes",]
+#mean(NAmes$SalePrice, na.rm = TRUE)
+regBefore2009optimal <- lm(SalePrice ~ LotArea + Street + LandSlope+ Neighborhood +OverallQual + RoofMatl+ MasVnrType+ BsmtUnfSF + BedroomAbvGr+ KitchenQual+ Fireplaces+ GarageArea, data = before2009)
+summary(regBefore2009optimal)
+
+predict_value<-predict(regBefore2009optimal, newdata = after2009[after2009$SalePrice==142769.7,],)
+predict_value
+predict_value <- predict_value[!is.na(predict_value)]
+#after2009[after2009$SalePrice==142769.7,]
+colSums(!is.na(after2009))
+#only Sale Price column has 5 NA values, so we decide to drop it
+after2009_noNA<-na.omit(after2009)
+#replace all the fake means using prediction values
+replace(after2009_noNA$SalePrice,after2009_noNA$SalePrice==142769.7,predict_value)
+
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+g1 <- before2009 %>% filter(Neighborhood == "NAmes") %>% ggplot(aes(x = SalePrice)) + geom_density(fill = "red", alpha = 0.5) + ggtitle("sales price of NAmes before 2009") + xlab("Sales price") 
+g2 <- after2009_noNA %>% filter(Neighborhood == "NAmes") %>% ggplot(aes(x = SalePrice)) + geom_density(fill = "blue", alpha = 0.5) + ggtitle("sales price of NAmes after 2009") + xlab("Sales price") 
+g3 <- before2009 %>% filter(Neighborhood == "Gilbert") %>% ggplot(aes(x = SalePrice)) + geom_density(fill = "green", alpha = 0.5) + ggtitle("sales price of Gilbert before 2009") + xlab("Sales price") 
+g4 <- after2009_noNA %>% filter(Neighborhood == "Gilbert") %>% ggplot(aes(x = SalePrice)) + geom_density(fill = "yellow", alpha = 0.5) + ggtitle("sales price of Gilbert after 2009") + xlab("Sales price") 
+
+grid.arrange(g1, g2, g3, g4, nrow=2)
+```
+
+## Regression after SalesPrice manipulation
+
+*Run a regression on the new data in after2009 and Store the result in variable called regAfter2009optimalFraud.*
+
+```{r}
+egAfter2009optimalFraud <- lm(SalePrice ~ LotArea + Street + LandSlope+ Neighborhood +OverallQual + RoofMatl+ MasVnrType+ BsmtUnfSF + BedroomAbvGr+ KitchenQual+ Fireplaces+ GarageArea, data = after2009_noNA)
+summary(egAfter2009optimalFraud)
+```
+
+## Diagnostic plots of regression after manipulation
+
+*Display the diagnostic plots of regAfter2009optimalFraud and search for outliers to see whether the result improves.*
+
+```{r}
+egAfter2009optimalFraud %>%
+  autoplot()
+```
+
+*The number of outliers decreased, now we only have 279, 317, 531 in Normal Q-Q, Residual vs Fitted graph, and Scale-Location graph as outliers.*
